@@ -14,8 +14,8 @@ enabled = true
 port = 54323
 [auth]
 enabled = true
-site_url = "http://localhost:5173"
-additional_redirect_urls = ["http://localhost:5173"]
+site_url = "https://judgex-platform.vercel.app"
+additional_redirect_urls = ["https://judgex-platform.vercel.app/**", "http://localhost:5173/**"]
 jwt_expiry = 3600
 enable_signup = true
 minimum_password_length = 12
