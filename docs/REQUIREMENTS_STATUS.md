@@ -7,7 +7,7 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | Website/onboarding | Value proposition, operator setup, email signup/sign-in, event creation/join | Full pricing, FAQ/support, reviewed legal/privacy pages |
 | Identity | Confirmed-email requirement, sign-in/out, password recovery, session refresh, database-derived roles | MFA and delegated permissions |
 | Tenant boundaries | Organization/event/team model, RLS, bounded RPCs, protected storage, authorization before retrieval | Deployed Auth/Storage tests and expanded IDOR suite |
-| Events/problems | Create/publish, registration codes, limits, timezone/deadlines, recording policy, versioned problem statements | Archive, eligibility/capacity and registration-window UI |
+| Events/problems | Create/publish, close/reopen registration, archive/restore, registration codes, limits, timezone/deadlines, recording policy, versioned problem statements | Eligibility/capacity and registration-window UI |
 | Teams | Email-bound invitation acceptance, encrypted invitation email jobs, revoke, member directory, team-size/duplicate constraints | Decline/resend UX and member management |
 | Projects | Autosave, serialized saves, save-before-lock, architecture/repository fields, immutable snapshot/checksum/rubric links | Rich technology/declaration fields and submission revision policy |
 | Uploads | Private files, MIME/size/quota checks, scanner adapter, validation states, signed downloads, unlocked-file removal | Scanner configuration, resumable uploads and progress/retry improvements |
@@ -24,6 +24,6 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | SaaS/billing | Initial server/RPC team/file/indexing/assessment limits | Plan metering, invoicing, payments, budget enforcement and subscriptions |
 | Security/governance | RLS, server secrets, untrusted-evidence boundary, consent, local authorization tests | API rate limits/CSP, production security review, rotation/incident/retention procedures |
 | Operations | Durable records, recoverable jobs, manual scoring during AI outage | Monitoring/alerts, backups/restore, rollback, load/accessibility checks |
-| CI | Frontend/server typechecks, production build, 35 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
+| CI | Frontend/server typechecks, production build, 36 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
 
 An implemented adapter is not a connected service. Local tests are not production guarantees. No real participant data should be used until external setup and pilot gates are verified.

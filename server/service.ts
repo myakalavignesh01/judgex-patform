@@ -61,7 +61,7 @@ async function processJob(job:any){
  }
  if(job.kind==='email'){
   const [n]=await query('notifications','id=eq.'+job.payload.notificationId);if(!n||n.status!=='queued')return;
-  const [event]=await query('events','id=eq.'+job.event_id);if(event?.status!=='released')throw Error('Results are not released');
+  const [event]=await query('events','id=eq.'+job.event_id);if(!event?.released_at)throw Error('Results are not released');
   const [card]=await query('approved_scorecards','id=eq.'+job.payload.scorecardId);if(!card)throw Error('Approved scorecard missing');
   const user=await db('/auth/v1/admin/users/'+job.payload.userId);if(!user.email)throw Error('Recipient has no email');
   const sent=await sendResultEmail({key:env.RESEND_API_KEY||'',from:env.RESEND_FROM||'',origin},{id:job.idempotency_key,to:user.email,eventName:event.name,scorecardId:card.id});await update('notifications','id=eq.'+n.id,{status:'sent',provider_id:sent.id});return;

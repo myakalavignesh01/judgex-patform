@@ -107,4 +107,10 @@ test('database enforces tenant, invitation, submission, approval and release bou
   assert.equal(await scalar(sql,next),true);assert.equal(await scalar('select state from artifact_processing where artifact_id=$1',[artifact]),'complete');
   await as(1);await assert.rejects(db.query(sql,next));
  });
+ await t.test('event lifecycle is organizer-scoped and archives preserve released team results',async()=>{
+  await as(1);await assert.rejects(db.query("select change_event_state($1,'archive')",[event1]));
+  await as(3);await db.query("select change_event_state($1,'close_registration')",[event2]);assert.equal(await scalar('select status from events where id=$1',[event2]),'evaluating');await db.query("select change_event_state($1,'reopen_registration')",[event2]);await db.query("select change_event_state($1,'return_to_draft')",[event2]);assert.equal(await scalar('select status from events where id=$1',[event2]),'draft');
+  await as(0);await db.query("select change_event_state($1,'archive')",[event1]);await as(1);assert.equal(Number(await scalar('select count(*) from approved_scorecards')),1);
+  await as(0);const dead=await scalar("select id from jobs where event_id=$1 and status='dead' limit 1",[event1]);if(dead)await assert.rejects(db.query('select retry_job($1)',[dead]));await db.query("select change_event_state($1,'restore')",[event1]);assert.equal(await scalar('select status from events where id=$1',[event1]),'released');await assert.rejects(db.query("select change_event_state($1,'return_to_draft')",[event1]));
+ });
 });
