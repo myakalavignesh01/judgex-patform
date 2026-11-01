@@ -1,0 +1,2 @@
+import {Webhook} from 'svix';
+export function verifyEmailWebhook(raw:string,headers:Record<string,string>,secret:string){if(!secret)throw Error('Webhook verification is not configured');new Webhook(secret).verify(raw,{'svix-id':headers['svix-id'],'svix-timestamp':headers['svix-timestamp'],'svix-signature':headers['svix-signature']});const event=JSON.parse(raw) as {type:string;data:{email_id:string}};if(typeof event.type!=='string'||typeof event.data?.email_id!=='string')throw Error('Invalid email webhook payload');return event;}

@@ -1,5 +1,7 @@
 # Next milestone: authenticated event foundation
 
+Historical milestone-01 plan. Current implementation status is in `REQUIREMENTS_STATUS.md`; deployment is in `PRODUCTION_SETUP.md`.
+
 The PRD recommends dependable human-scored completion before AI. This first slice validates that workflow without claiming backend security. The next milestone must replace the local store with an authenticated API; do not bolt real participant data onto localStorage.
 
 ## Architecture boundary

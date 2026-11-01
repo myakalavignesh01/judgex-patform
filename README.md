@@ -1,50 +1,48 @@
-# JudgeX · first product milestone
+# JudgeX
 
-A working React + TypeScript implementation of the core human-scored event journey, based on the supplied production PRD and architecture. This is a browser-local product demo, not a production multi-tenant service.
+Hackathon operations and evidence-assisted evaluation: authenticated event/team workspaces, project submissions, consent-led presentation capture, private evidence, bounded AI processing, human approval and result release.
 
-## Run
+The default app is the real-service workspace. It needs Supabase and an API/worker deployment. Without configuration it displays operator setup. The original synthetic demo remains at /?demo=1.
+
+## Run locally
 
 Requires Node.js 24 and npm.
 
-```sh
-npm ci
-npm run dev
-npm test
-npm run build
-```
+    npm ci
+    npm run build
+    npm test
+    npm run preview
 
-## Try the complete flow
+Use npm run dev for development. Copy .env.example to an untracked .env and configure server values before npm run api. The container uses host-managed secrets.
 
-1. Open the organizer dashboard. Explore the queue, rubric, schedule, and approved scorecards.
-2. Select **Participant** in the top-right role preview. Edit Nova Labs' project, save a draft, then **Lock & submit**.
-3. Return to **Organizer**. Review each pending project, enter all four scores and feedback, and approve.
-4. Open **Results**. The release gate blocks until every team has submitted and every scorecard is approved.
-5. Release results. Switch to Participant to see the team's scorecard, or export the approved CSV as Organizer.
-6. Create a fresh event to try editable rubric weights. The rubric freezes on the first approval.
+## Connect services
 
-All sample teams and evidence are synthetic. State is saved in this browser's localStorage. Settings includes a reset action. Use synthetic data only. Role switching is a demonstration, not authentication or authorization.
+Follow [production setup](docs/PRODUCTION_SETUP.md). Supabase GitHub integration Working directory is a single dot (.) because supabase/ is at the repository root. Migrations are in supabase/migrations/ and CLI configuration is supabase/config.toml.
 
-## Implemented
+Public frontend build values are VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KEY and VITE_API_URL. Provider keys and the service-role JWT key belong only on the API/worker host. Never commit an .env file.
 
-- Responsive dashboard, submission search/filtering, team cards and read-only presentation schedule.
-- Create and switch events with an editable weighted rubric before evaluation.
-- Participant draft saving and one-way submission locking with a version and timestamp.
-- Evidence review, deterministic weighted scoring (0–10 per criterion, normalized to 100), feedback, approval, and mandatory score-change reasons.
-- Release preconditions, immutable released results, participant result visibility, tied score indication, and escaped CSV export.
-- Local activity history, empty/error states, reduced-motion support, visible keyboard focus, and labelled forms.
-- Domain tests for calculation, rubric validity, score-change reasons, locking, release blocking, and release immutability.
+## Included workflows
 
-## Not implemented or connected
+- Verified signup/sign-in, database-derived roles, events, versioned problem statements and registration.
+- Teams, email-bound invitations, autosaved drafts, private artifacts and immutable submission versions.
+- Consent-led camera/microphone/screen recording, check-in, scheduling and manual evidence alternatives.
+- Public GitHub snapshots, Gemini visual/audio/text extraction, embeddings, authorized hybrid retrieval and validated AI suggestions.
+- Human approval, atomic result release, queued delivery, signed callbacks, appeals, opt-in public results and printable reports/certificates.
+- Durable jobs with retries, leases, attempt fencing, dead-letter recovery and activity history.
 
-Supabase Auth, real organizations and memberships, RLS, server authorization, invitations, private uploads, artifact scanning, GitHub ingestion, AI/OCR/transcription, durable workers, email, report PDFs, appeals, billing, quotas, monitoring, backups, legal documents, and production operations. Browser data can be inspected or modified by its owner; the role preview is not a security boundary. The local audit trail is not tamper-proof. Draft saving is explicit, not automatic. Schedules are sample slots in Asia/Kolkata.
+## Current limits
 
-## Source map
+This is an implementation in progress. Service accounts, real provider tests, production monitoring, automated retention, long-media segmentation, billing, recovery/accessibility/load tests and other PRD items remain pending. Exact status: [requirements status](docs/REQUIREMENTS_STATUS.md).
 
-- `src/domain.ts`: pure scoring and lifecycle functions; synthetic seed data.
-- `src/main.tsx`: app shell, organizer views, local persistence, release and export.
-- `src/components.tsx`: evidence review, participant workspace, rubric and event forms.
-- `src/style.css`: responsive design system and dashboard illustration.
-- `tests/domain.test.ts`: business-rule regression tests.
-- `docs/NEXT_MILESTONE.md`: backend implementation plan and acceptance gates.
+The inline AI extraction path supports sources up to 15 MB. Larger files are preserved but require manual review or a separate segmented processing path. Private GitHub installation access and live video conferencing are not implemented. No face, gaze, emotion, appearance or accent scoring is used.
 
-The private Site deploys only the static production bundle. No provider keys are present or required. Sources are retained alongside the build so the UI can be connected to authenticated services in the next milestone.
+## Source structure
+
+- src/platform/: authenticated UI, operator setup, presentation capture and service client.
+- src/main.tsx and src/domain.ts: entry point and preserved synthetic demo.
+- server/: Node API, durable worker, Gemini/GitHub/Resend adapters and webhooks.
+- supabase/: PostgreSQL schema, RLS, RPCs, private storage and retrieval.
+- tests/: domain, provider-boundary and PostgreSQL authorization tests.
+- docs/: setup, requirement status and verification notes.
+
+The test database emulates Supabase identity functions and storage metadata around embedded PostgreSQL. It does not replace deployed Auth, Storage or provider tests.

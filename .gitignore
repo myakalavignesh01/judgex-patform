@@ -5,3 +5,5 @@ dist/
 .env.*
 !.env.example
 *.tar.gz
+supabase/.temp/
+supabase/.branches/

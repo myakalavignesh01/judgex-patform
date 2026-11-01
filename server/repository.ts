@@ -1,0 +1,13 @@
+type RepositoryFile={path:string;sha:string;size:number;type:string};
+const sourceExtensions=/\.(md|txt|ts|tsx|js|jsx|py|go|rs|java|sql|json|yaml|yml|css|html)$/i;
+export function parseRepository(url:string){const u=new URL(url);if(u.protocol!=='https:'||u.hostname!=='github.com'||u.username||u.password||u.search||u.hash)throw Error('Only GitHub HTTPS repository URLs are allowed');const parts=u.pathname.replace(/\/$/,'').split('/').filter(Boolean);if(parts.length!==2||parts.some(p=>!p||!(/^[A-Za-z0-9_.-]+$/).test(p)))throw Error('Provide a repository root URL');return {owner:parts[0],repo:parts[1].replace(/\.git$/,'')};}
+export function selectRepositoryFiles(files:RepositoryFile[]){return files.filter(f=>f.type==='blob'&&f.size>0&&f.size<=100000&&sourceExtensions.test(f.path)&&!/(^|\/)(node_modules|vendor|dist|build|\.git|\.env[^/]*|package-lock\.json|pnpm-lock\.yaml|yarn\.lock)(\/|$)/i.test(f.path)&&!/(secret|credential|private[_-]?key)/i.test(f.path)).sort((a,b)=>{const rank=(p:string)=>/readme/i.test(p)?0:/architect|design|docs\//i.test(p)?1:2;return rank(a.path)-rank(b.path)||a.path.localeCompare(b.path)}).slice(0,30);}
+export async function ingestPublicRepository(url:string){const {owner,repo}=parseRepository(url);const prefix='https://api.github.com/repos/'+owner+'/'+repo;
+ async function get(path:string){const r=await fetch(prefix+path,{headers:{Accept:'application/vnd.github+json','User-Agent':'JudgeX-evidence-ingestion'},signal:AbortSignal.timeout(20000),redirect:'error'});if(!r.ok)throw Error('GitHub import failed ('+r.status+'). Use a public repository you are authorized to submit.');return r.json();}
+ const metadata=await get('');if(metadata.private)throw Error('Private repositories require a separately configured GitHub App installation');
+ const commit=await get('/commits/'+encodeURIComponent(metadata.default_branch));if(!/^[a-f0-9]{40}$/.test(commit.sha))throw Error('Invalid pinned commit');
+ const tree=await get('/git/trees/'+commit.commit.tree.sha+'?recursive=1');if(tree.truncated)throw Error('Repository tree exceeds the bounded ingestion limit');
+ const selected=selectRepositoryFiles(tree.tree),items=[];let budget=0;
+ for(const file of selected){if(budget+file.size>1000000)break;const blob=await get('/git/blobs/'+file.sha);if(blob.encoding!=='base64')continue;const text=Buffer.from(blob.content,'base64').toString('utf8');if(text.includes('\0'))continue;budget+=file.size;items.push({source:'github:'+owner+'/'+repo+'@'+commit.sha+':'+file.path,content:text});}
+ return {commitSha:commit.sha,items,limitations:['Read-only snapshot; submitted code was not executed.','Import is bounded to 30 selected text files and 1 MB; omitted files are not assessed.']};
+}

@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {LayoutDashboard,FolderOpen,Users,CalendarDays,ClipboardList,Trophy,Settings,ArrowUpRight,ArrowRight,Plus,Search,Check,Clock,ShieldCheck,FileText,ChevronRight,Download,X,Menu,Layers,CheckCircle2,Activity,ArrowLeft,Lock} from 'lucide-react';
 import {seed,total,approve,release,releaseIssues,lockProject,validateRubric,rubric,type State,type Event,type Project,type Criterion} from './domain';
 import './style.css';
+import {Platform} from './platform/Platform';
 import {Review,Participant,Rubric,EventForm} from './components';
 const KEY='judgex-demo-v1';
 function read():State{try{const v=JSON.parse(localStorage.getItem(KEY)||'null');if(v?.schema===1&&Array.isArray(v.events)&&v.events.length&&Array.isArray(v.audit))return v;}catch{}return seed();}
@@ -60,4 +61,4 @@ function App(){
 function PageHeading({title,sub}:{title:string;sub:string}){return <div className="page-heading"><div><h1>{title}</h1><p>{sub}</p></div></div>}
 function Empty({text}:{text:string}){return <div className="empty"><FolderOpen size={30}/><p>{text}</p></div>}
 function ProjectTable({projects,onReview}:{projects:Project[];onReview:(id:string)=>void}){return <div className="table-scroll"><table><thead><tr><th>PROJECT / TEAM</th><th>TRACK</th><th>STATUS</th><th aria-label="Actions"/></tr></thead><tbody>{projects.map(p=><tr key={p.id}><td><div className="project-cell"><span className="team-avatar" style={{background:p.color}}>{p.team.split(' ').map(w=>w[0]).join('').slice(0,2)}</span><div><strong>{p.title||'Untitled project'}</strong><small>{p.team}</small></div></div></td><td><span className="track">{p.track}</span></td><td><Badge status={p.status}/></td><td><button className="review-link" onClick={()=>onReview(p.id)}>{p.status==='review'?'Review':'View'}<ArrowUpRight size={14}/></button></td></tr>)}</tbody></table>{!projects.length&&<Empty text="No projects match this view."/>}</div>}
-createRoot(document.getElementById('root')!).render(<App/>);
+createRoot(document.getElementById('root')!).render(new URLSearchParams(location.search).get('demo')==='1'?<App/>:<Platform/>);

@@ -1,0 +1,5 @@
+import {test} from 'node:test';
+import {strict as assert} from 'node:assert';
+import {parseRepository,selectRepositoryFiles} from '../server/repository.ts';
+test('repository ingestion restricts destination and path',()=>{assert.deepEqual(parseRepository('https://github.com/team/project.git'),{owner:'team',repo:'project'});for(const url of ['http://github.com/a/b','https://github.com.evil.test/a/b','https://evil.test/a/b','https://github.com/a/b/tree/main','https://user:password@github.com/a/b','https://github.com/a/b?redirect=evil'])assert.throws(()=>parseRepository(url));});
+test('repository selection excludes generated, binary, huge and secret files',()=>{const paths=['src/main.ts','README.md','node_modules/a/index.js','.env.local','private_key.json','dist/bundle.js','docs/architecture.md','package-lock.json'];const files=paths.map(path=>({path,sha:'a'.repeat(40),size:20,type:'blob'}));assert.deepEqual(selectRepositoryFiles(files).map(f=>f.path),['README.md','docs/architecture.md','src/main.ts']);assert.equal(selectRepositoryFiles([{path:'main.ts',sha:'a',size:100001,type:'blob'}]).length,0);});
