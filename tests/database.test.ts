@@ -6,7 +6,7 @@ import {pgcrypto} from '@electric-sql/pglite/contrib/pgcrypto';
 import {vector} from '@electric-sql/pglite-pgvector';
 test('database enforces tenant, invitation, submission, approval and release boundaries',async t=>{
  const db=new PGlite({extensions:{pgcrypto,vector}});t.after(()=>db.close());
- await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;
+ await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;create schema auth;create schema storage;create schema extensions;create extension pgcrypto with schema extensions;
  create table auth.users(id uuid primary key,email text,email_confirmed_at timestamptz,raw_user_meta_data jsonb default '{}');
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
  create function auth.jwt() returns jsonb language sql stable as $$select coalesce(nullif(current_setting('request.jwt.claims',true),''),'{}')::jsonb$$;
