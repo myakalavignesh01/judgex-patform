@@ -45,6 +45,11 @@ test('database enforces tenant, invitation, submission, approval and release bou
   await db.query("delete from storage.objects where bucket_id='judgex-evidence' and name=$1",[a.object_key]);await db.query('select remove_pending_artifact($1)',[a.id]);
   await assert.rejects(db.query("select create_artifact($1,'recording.mp4','video/mp4',100,'document')",[team1]));
  });
+ await t.test('capture consent matches the current policy and linked clips remain uploader-scoped',async()=>{
+  await as(1);await assert.rejects(db.query("select record_capture_consent($1,'old-policy')",[team1]));await db.query("select record_capture_consent($1,'1')",[team1]);const a=await scalar("select create_artifact($1,'audio.mp4','audio/mp4',100,'recording')",[team1]);
+  const sql="select link_capture($1,$2,$3,now(),42)";await as(2);await assert.rejects(db.query(sql,[a.id,ids[5],'audio']));await as(1);await assert.rejects(db.query(sql,[a.id,ids[5],null]));await assert.rejects(db.query(sql,[a.id,ids[5],'camera']));await db.query(sql,[a.id,ids[5],'audio']);assert.equal(await scalar('select capture_session from artifacts where id=$1',[a.id]),ids[5]);assert.equal(await scalar('select capture_source from artifacts where id=$1',[a.id]),'audio');await assert.rejects(db.query("select link_capture($1,$2,'audio',now(),901)",[a.id,ids[5]]));
+  await db.exec('reset role');await db.query("update artifacts set scan_state='clean' where id=$1",[a.id]);await as(1);await assert.rejects(db.query(sql,[a.id,ids[5],'audio']));await db.query('select remove_pending_artifact($1)',[a.id]);
+ });
  let submission1:string,submission2:string;
  await t.test('locking preserves snapshots and freezes the rubric',async()=>{
   await as(1);await db.query("select save_project($1,'Working project','A sufficiently detailed project abstract for evaluation.','','A clear system architecture.')",[team1]);submission1=await scalar('select lock_submission($1)',[team1]);

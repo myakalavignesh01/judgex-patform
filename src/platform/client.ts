@@ -1,3 +1,4 @@
+import {uploadBinary,EvidenceUploadError,type UploadProgress} from './upload.ts';
 export type Connection={url:string;key:string;api:string};
 import {requestError} from './errors.ts';
 export type Session={access_token:string;refresh_token:string;expires_at:number};
@@ -19,7 +20,13 @@ export class Client{
  async list(table:string,query=''){const rows:any[]=[];for(let offset=0;offset<25000;offset+=500){const page=await this.request('/rest/v1/'+table+'?select=*&limit=500&offset='+offset+(query?'&'+query:''));if(!Array.isArray(page))throw Error('Invalid list response');rows.push(...page);if(page.length<500)return rows;}throw Error('This view exceeds 25,000 records. Narrow the event filter.');}
  async rpc(name:string,args:Record<string,unknown>={}){return this.request('/rest/v1/rpc/'+name,{method:'POST',body:JSON.stringify(args)});}
  async service(path:string,args:Record<string,unknown>={}){if(!this.config.api)throw Error('Configure the JudgeX API service first');const token=await this.token();const r=await fetch(this.config.api+path,{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify(args)});const d=await r.json();if(!r.ok)throw Error(d.error||'Service failed');return d;}
- async upload(teamId:string,file:File,kind:string){if(!file.size||file.size>100*1024*1024)throw Error('Choose a file between 1 byte and 100 MB');const artifact=await this.rpc('create_artifact',{team_id_input:teamId,name_input:file.name,mime_input:file.type,size_input:file.size,kind_input:kind});const token=await this.token();const r=await fetch(this.config.url+'/storage/v1/object/judgex-evidence/'+artifact.object_key,{method:'POST',headers:{apikey:this.config.key,Authorization:'Bearer '+token,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},body:file});if(!r.ok)throw Error('Upload failed. Retry with a new artifact.');await this.service('/v1/artifacts/complete',{artifactId:artifact.id});return artifact;}
+ async upload(teamId:string,file:File,kind:string,options?:{progress?:UploadProgress;capture?:{sessionId:string;source:string;startedAt:string;durationSeconds:number}}){
+  if(!file.size||file.size>100*1024*1024)throw Error('Choose a file between 1 byte and 100 MB');const artifact=await this.rpc('create_artifact',{team_id_input:teamId,name_input:file.name,mime_input:file.type,size_input:file.size,kind_input:kind});let stored=false;
+  try{if(options?.capture){const c=options.capture;await this.rpc('link_capture',{artifact_id_input:artifact.id,session_input:c.sessionId,source_input:c.source,started_at_input:c.startedAt,duration_input:c.durationSeconds});}
+   const token=await this.token();await uploadBinary(this.config.url+'/storage/v1/object/judgex-evidence/'+artifact.object_key,{apikey:this.config.key,Authorization:'Bearer '+token,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},file,options?.progress);stored=true;
+   await this.service('/v1/artifacts/complete',{artifactId:artifact.id});return artifact;
+  }catch(e){throw new EvidenceUploadError((e as Error).message,artifact,stored);}
+ }
  async removeArtifact(id:string,objectKey:string){await this.request('/storage/v1/object/judgex-evidence',{method:'DELETE',body:JSON.stringify({prefixes:[objectKey]})});await this.rpc('remove_pending_artifact',{artifact_id_input:id});}
  async download(objectKey:string){const d=await this.request('/storage/v1/object/sign/judgex-evidence/'+objectKey,{method:'POST',body:JSON.stringify({expiresIn:60})});return this.config.url+'/storage/v1'+d.signedURL;}
 }

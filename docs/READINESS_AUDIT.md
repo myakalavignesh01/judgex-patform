@@ -29,8 +29,8 @@ The user-supplied JUDGEX LEO reference was inspected on 1 November: dashboard, p
 | Organization/events | Event operations and rules | Organization reuse/admin UX, discovery/visibility controls, eligibility verification and registration-boundary browser tests |
 | Teams | Create, authenticated email-bound accept/decline, revoke, directory | Resend/rotation, remove/leave/transfer-captain policy and audited member-management UI |
 | Project workspace | Detailed autosave and immutable lock | Policy-controlled post-lock revisions and clearer field/readiness validation |
-| Uploads | Private PDF/images/media, limits, signatures, scanner adapter, retry validation | Connected scanner; resumable upload/progress; PPT/PPTX parser; safe archive extraction/link policy; real failure/retry tests |
-| Presentation operations | Conflict-checked versioned slots, room/queue progression, support check, opt-in schedule/reminder jobs, project-defence questions with immutable answers, consent, capture, timer, local recovery | Real device/recording tests, room-provider integration and richer event alternatives |
+| Uploads | Private PDF/images/media, limits, signatures, scanner adapter, retry validation and byte progress | Connected scanner; resumable uploads; PPT/PPTX parser; safe archive extraction/link policy; real failure/retry tests |
+| Presentation operations | Conflict-checked versioned slots, room/queue progression, support check, opt-in schedule/reminder jobs, project-defence questions with immutable answers, policy-version consent, independent device previews, session-linked camera/screen/audio clips, timer, local downloads and stored-upload validation retry | Real device/recording tests, room-provider integration and richer event alternatives |
 | Live presentation | Local camera/screen recording | Remote participant/organizer conferencing, reconnect/network recovery and live captions. Local capture is not a live meeting |
 | Vision/transcription | Gemini OCR/chart/diagram/media extraction and checkpointed windows | Provider credentials/host, real files and languages, source-quality checks, consent/device tests and cleanup verification |
 | Repository ingestion | Public pinned GitHub snapshots, read-only, no execution | Private-repository GitHub App authorization, revocation and installation UX |
@@ -46,7 +46,7 @@ The user-supplied JUDGEX LEO reference was inspected on 1 November: dashboard, p
 | Retention/privacy | Recording policy/version and consent records | Actual retention/deletion jobs, backup expiry/legal-hold procedure, request handling and reviewed privacy/terms/subprocessor information |
 | Security | RLS, bounded RPCs, secrets server-side, local isolation tests, CSP/API budgets | Hosted IDOR/Auth/Storage/API suite, account abuse controls, MFA, secrets/dependency scans, key rotation and independent review |
 | Monitoring/operations | Request metadata logs, durable jobs and health configuration flags | Metrics/traces/alerts, worker freshness and queue-age monitoring, incident/support contacts, backup/restore/rollback drills |
-| Release quality | 57 passing local tests and frontend/server build at this audit stage | Desktop/mobile hosted E2E with distinct accounts, accessibility review, 100-user load test, AI golden set and a completed real pilot |
+| Release quality | 68 passing local tests and frontend/server build at this audit stage | Desktop/mobile hosted E2E with distinct accounts, accessibility review, 100-user load test, AI golden set and a completed real pilot |
 
 ## External setup that code cannot substitute for
 

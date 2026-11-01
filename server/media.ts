@@ -1,3 +1,4 @@
+export const providerMimeType=(mime:string)=>mime==='audio/mp4'?'audio/m4a':mime;
 export type ProviderFile={name:string;uri:string;mimeType:string;state:string;expirationTime?:string;videoMetadata?:{videoDuration?:string}};
 type Provider={key:string;model:string};
 const api='https://generativelanguage.googleapis.com';
@@ -5,6 +6,7 @@ function filename(name:string){if(!/^files\/[A-Za-z0-9_-]+$/.test(name))throw Er
 function validateFile(file:ProviderFile){filename(file.name);const uri=new URL(file.uri);if(uri.origin!==api||!uri.pathname.startsWith('/v1beta/files/'))throw Error('Unexpected provider file location');return file;}
 export function mediaWindows(duration:number,seconds=120,maximum=3600){if(!Number.isFinite(duration)||!Number.isFinite(maximum)||maximum<=0||maximum>3600||duration<=0||duration>maximum||!Number.isFinite(seconds)||seconds<10)throw Error('Presentation duration exceeds configured processing limits');const windows:{start:number;end:number}[]=[];for(let start=0;start<duration;start+=seconds)windows.push({start,end:Math.min(start+seconds,duration)});return windows;}
 export async function uploadProviderFile(config:Provider,bytes:Uint8Array<ArrayBuffer>,mimeType:string):Promise<ProviderFile>{
+ mimeType=providerMimeType(mimeType);
  if(!config.key)throw Error('Gemini is not configured');if(!bytes.byteLength||bytes.byteLength>100*1024*1024)throw Error('File exceeds the processing size limit');
  const start=await fetch(api+'/upload/v1beta/files',{method:'POST',headers:{'x-goog-api-key':config.key,'Content-Type':'application/json','X-Goog-Upload-Protocol':'resumable','X-Goog-Upload-Command':'start','X-Goog-Upload-Header-Content-Length':String(bytes.byteLength),'X-Goog-Upload-Header-Content-Type':mimeType},body:JSON.stringify({file:{displayName:'JudgeX private evaluation evidence'}}),signal:AbortSignal.timeout(30000),redirect:'error'});
  if(!start.ok)throw Error('Provider upload initialization failed ('+start.status+')');const target=start.headers.get('x-goog-upload-url');if(!target||new URL(target).origin!==api)throw Error('Unexpected provider upload destination');

@@ -1,6 +1,7 @@
 import {test} from 'node:test';
 import {strict as assert} from 'node:assert';
 import {Client} from '../src/platform/client.ts';
+import {EvidenceUploadError} from '../src/platform/upload.ts';
 function browser(t:any,hash=''){
  const values=new Map<string,string>(),original=new Map<string,PropertyDescriptor|undefined>();
  const location={hash,pathname:'/',search:'?invite=example',origin:'https://judgex.example'};let replaced='';
@@ -30,4 +31,9 @@ test('parallel authenticated requests share one token refresh',async t=>{
 test('database lists read subsequent pages rather than silently truncating',async t=>{
  browser(t);const client=new Client(config);const paths:string[]=[];client.request=async path=>{paths.push(path);return path.includes('offset=0')?Array.from({length:500},(_,id)=>({id})):[{id:500}];};
  assert.equal((await client.list('projects','team_id=eq.synthetic')).length,501);assert.equal(paths.length,2);assert(paths[1].includes('offset=500'));assert(paths.every(p=>p.includes('team_id=eq.synthetic')));
+});
+test('a validation outage reports the stored artifact instead of losing upload recovery metadata',async t=>{
+ browser(t);const original=Object.getOwnPropertyDescriptor(globalThis,'XMLHttpRequest');class Request{status=200;upload={};onload:any;open(){}setRequestHeader(){}send(){queueMicrotask(()=>this.onload());}}Object.defineProperty(globalThis,'XMLHttpRequest',{value:Request,configurable:true,writable:true});t.after(()=>{if(original)Object.defineProperty(globalThis,'XMLHttpRequest',original);else Reflect.deleteProperty(globalThis,'XMLHttpRequest')});
+ const client=new Client(config),calls:string[]=[];client.rpc=async name=>{calls.push(name);return {id:'artifact',object_key:'private/recording.webm'}};client.service=async()=>{throw Error('Scanner is offline')};
+ await assert.rejects(client.upload('team',new File(['clip'],'capture.webm',{type:'video/webm'}),'recording',{capture:{sessionId:'synthetic',source:'camera',startedAt:'2026-11-01T10:00:00Z',durationSeconds:3}}),(e:unknown)=>{assert(e instanceof EvidenceUploadError);assert.equal(e.stored,true);assert.equal(e.artifact.id,'artifact');return true;});assert.deepEqual(calls,['create_artifact','link_capture']);
 });

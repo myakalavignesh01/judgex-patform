@@ -1,34 +1,60 @@
-export type RecordingState='idle'|'checking'|'recording'|'stopped'|'failed';
-/** Capture is called only from an explicit participant action after recording consent. */
-export class PresentationCapture {
- private recorder:MediaRecorder|null=null;
- private streams:MediaStream[]=[];
- private parts:Blob[]=[];
- state:RecordingState='idle';
- startedAt:number|null=null;
- get previewStream(){return this.streams.at(-1)||null;}
- async start(consent:{accepted:boolean;policyVersion:string;screen:boolean},onState:(state:RecordingState)=>void){
-  if(!consent.accepted||!consent.policyVersion)throw Error('Accept the recording policy before starting');
-  if(this.state==='recording')throw Error('A recording is already running');
-  if(!navigator.mediaDevices||!window.MediaRecorder)throw Error('Recording is unavailable. Use the event’s manual submission alternative.');
-  this.state='checking';onState(this.state);
+export type RecordingState='idle'|'ready'|'checking'|'recording'|'stopped'|'failed';
+export type CaptureSource='camera'|'microphone'|'screen';
+export type CaptureConsent={accepted:boolean;policyVersion:string};
+export type RecordedClip={source:'camera'|'screen'|'audio';blob:Blob;startedAt:string;durationSeconds:number;sessionId:string};
+type Part={source:RecordedClip['source'];recorder:MediaRecorder;chunks:Blob[];done:boolean;started:boolean};
+/** All permission requests originate from explicit device buttons after informed consent. */
+export class PresentationCapture{
+ state:RecordingState='idle';startedAt:number|null=null;sessionId='';clips:RecordedClip[]=[];notice='';
+ private sources:Partial<Record<CaptureSource,MediaStream>>={};private parts:Part[]=[];private bytes=0;private pending=new Set<CaptureSource>();
+ private notify:()=>void=()=>{};private disposed=false;private generation=0;private stopping=false;private failed=false;private finalized=false;
+ private deadline:ReturnType<typeof setTimeout>|null=null;private completion:Promise<RecordedClip[]>|null=null;private resolve:((clips:RecordedClip[])=>void)|null=null;
+ private maximumBytes:number;private durationMs:number;
+ constructor(limits={maximumBytes:90*1024*1024,durationMs:890000}){this.maximumBytes=limits.maximumBytes;this.durationMs=limits.durationMs;}
+ subscribe(listener:()=>void){this.notify=listener;return()=>{this.notify=()=>{}};}
+ get cameraStream(){return this.sources.camera||null;}get screenStream(){return this.sources.screen||null;}
+ get sourceState(){return {camera:this.live('camera'),microphone:this.live('microphone'),screen:this.live('screen')};}
+ private live(source:CaptureSource){return !!this.sources[source]?.getTracks().some(t=>t.readyState==='live');}
+ private requireConsent(consent:CaptureConsent){if(!consent.accepted||!consent.policyVersion)throw Error('Accept the recording policy before enabling devices');if(this.disposed)throw Error('Presentation capture has closed');}
+ async setSource(source:CaptureSource,enabled:boolean,consent:CaptureConsent){
+  this.requireConsent(consent);if(['recording','checking'].includes(this.state))throw Error('Stop recording before changing capture sources');
+  if(!enabled){const stream=this.sources[source];delete this.sources[source];stream?.getTracks().forEach(t=>t.stop());this.state=Object.values(this.sourceState).some(Boolean)?'ready':'idle';this.notify();return;}
+  if(this.live(source))return;if(this.pending.has(source))throw Error('A permission request for this device is already open');
+  const devices=navigator.mediaDevices;if(!devices)throw Error('Media capture is unavailable in this browser');if(source==='screen'&&typeof devices.getDisplayMedia!=='function')throw Error('Screen sharing is unavailable in this browser. Use camera/microphone or permitted uploaded evidence.');const generation=this.generation;
+  // Each request is independent: a denied device never disposes another working source.
+  let stream:MediaStream;
+  this.pending.add(source);try{stream=source==='screen'?await devices.getDisplayMedia({video:true,audio:false}):await devices.getUserMedia({video:source==='camera',audio:source==='microphone'});}catch(e){this.notice=source+' access was not enabled. Your other sources are unchanged.';this.notify();throw e;}finally{this.pending.delete(source);}
+  if(this.disposed||generation!==this.generation){stream.getTracks().forEach(t=>t.stop());throw Error('Capture closed while permission was pending');}
+  if(!stream.getTracks().some(t=>t.readyState==='live')){stream.getTracks().forEach(t=>t.stop());throw Error('No active '+source+' track was supplied');}
+  this.sources[source]=stream;this.notice='';
+  for(const track of stream.getTracks())track.addEventListener('ended',()=>{if(this.sources[source]!==stream)return;delete this.sources[source];this.notice=source+' disconnected or sharing ended.';if(this.state==='recording'&&source!=='microphone')this.stopAll();else if(this.state!=='recording')this.state=Object.values(this.sourceState).some(Boolean)?'ready':'idle';this.notify();},{once:true});
+  this.state='ready';this.notify();
+ }
+ async start(consent:CaptureConsent){
+  this.requireConsent(consent);if(['recording','checking'].includes(this.state))throw Error('A recording is already running');if(this.pending.size)throw Error('Finish device permission requests before recording');if(typeof MediaRecorder==='undefined')throw Error('Recording is unavailable. Use uploaded evidence instead');
+  const active=this.sourceState;if(!Object.values(active).some(Boolean))throw Error('Enable a camera, microphone or screen before recording');
+  this.state='checking';this.notify();this.parts=[];this.clips=[];this.bytes=0;this.stopping=false;this.failed=false;this.finalized=false;this.notice='';this.sessionId=crypto.randomUUID();this.startedAt=Date.now();this.completion=new Promise(resolve=>{this.resolve=resolve});
+  const microphone=this.sources.microphone?.getAudioTracks().filter(t=>t.readyState==='live')||[];
+  const streams:{source:RecordedClip['source'];stream:MediaStream}[]=[];
+  if(active.screen)streams.push({source:'screen',stream:new MediaStream([...this.sources.screen!.getVideoTracks(),...microphone])});
+  if(active.camera)streams.push({source:'camera',stream:new MediaStream([...this.sources.camera!.getVideoTracks(),...(!active.screen?microphone:[])])});
+  if(!streams.length&&microphone.length)streams.push({source:'audio',stream:new MediaStream(microphone)});
   try{
-   const camera=await navigator.mediaDevices.getUserMedia({video:!consent.screen,audio:true});this.streams.push(camera);
-   let captured=camera;
-   if(consent.screen){const screen=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});this.streams.push(screen);captured=new MediaStream([...screen.getVideoTracks(),...camera.getAudioTracks()]);screen.getVideoTracks()[0].addEventListener('ended',()=>{if(this.recorder?.state==='recording')this.recorder.stop()},{once:true});}
-   const mime=['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'].find(t=>MediaRecorder.isTypeSupported(t));
-   this.parts=[];this.recorder=new MediaRecorder(captured,mime?{mimeType:mime}:undefined);
-   this.recorder.ondataavailable=e=>{if(e.data.size){this.parts.push(e.data);if(this.parts.reduce((size,part)=>size+part.size,0)>90*1024*1024&&this.recorder?.state==='recording')this.recorder.stop()}};
-   this.recorder.onstop=()=>{this.releaseDevices();this.state='stopped';onState(this.state)};
-   this.recorder.onerror=()=>{this.releaseDevices();this.state='failed';onState(this.state)};
-   this.recorder.start(1000);this.startedAt=Date.now();this.state='recording';onState(this.state);
-  }catch(e){this.releaseDevices();this.state='failed';onState(this.state);throw e;}
+   for(const item of streams){
+    const types=item.source==='audio'?['audio/webm;codecs=opus','audio/webm','audio/mp4']:['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4'];
+    const mime=types.find(t=>MediaRecorder.isTypeSupported(t));if(!mime)throw Error('No supported recording format for '+item.source);
+    const recorder=new MediaRecorder(item.stream,{mimeType:mime}),part:Part={source:item.source,recorder,chunks:[],done:false,started:false};this.parts.push(part);
+    recorder.ondataavailable=e=>{if(e.data.size){part.chunks.push(e.data);this.bytes+=e.data.size;if(this.bytes>=this.maximumBytes&&!this.stopping){this.notice='Session size limit reached. Your recordings were stopped and preserved.';this.stopAll();}}};
+    recorder.onstop=()=>{part.done=true;this.finish();};
+    recorder.onerror=()=>{this.failed=true;this.notice='A recorder failed. Available clips are preserved for local recovery.';this.stopAll();};
+    recorder.start(1000);part.started=true;
+   }
+   this.state='recording';this.deadline=setTimeout(()=>{this.notice='Session time limit reached. Your recordings were stopped and preserved.';this.stopAll();},this.durationMs);this.notify();
+  }catch(e){this.failed=true;this.notice=(e as Error).message;for(const part of this.parts)if(!part.started)part.done=true;this.stopAll();throw e;}
  }
- async stop():Promise<Blob>{
-  const recorder=this.recorder;if(!recorder)throw Error('No recording exists');
-  if(recorder.state==='recording')await new Promise<void>(resolve=>{recorder.addEventListener('stop',()=>resolve(),{once:true});recorder.stop()});
-  return new Blob(this.parts,{type:recorder.mimeType});
- }
- releaseDevices(){for(const stream of this.streams)for(const track of stream.getTracks())track.stop();this.streams=[];}
- dispose(){if(this.recorder){this.recorder.ondataavailable=null;this.recorder.onstop=null;this.recorder.onerror=null;if(this.recorder.state==='recording')this.recorder.stop();}this.releaseDevices();this.parts=[];}
+ private stopAll(){if(this.stopping)return;this.stopping=true;if(this.deadline)clearTimeout(this.deadline);this.deadline=null;for(const part of this.parts){if(part.recorder.state==='recording')part.recorder.stop();else if(!part.started)part.done=true;}this.finish();}
+ private finish(){if(this.finalized||this.parts.some(p=>!p.done))return;this.finalized=true;this.stopping=true;if(this.deadline)clearTimeout(this.deadline);this.deadline=null;const duration=Math.max(0,(Date.now()-(this.startedAt||Date.now()))/1000);this.clips=this.parts.filter(p=>p.chunks.some(b=>b.size)).map(p=>({source:p.source,blob:new Blob(p.chunks,{type:p.recorder.mimeType.split(';')[0]}),startedAt:new Date(this.startedAt!).toISOString(),durationSeconds:duration,sessionId:this.sessionId}));this.releaseDevices();this.state=this.failed?'failed':'stopped';this.resolve?.(this.clips);this.resolve=null;this.notify();}
+ async stop(){if(!this.completion)throw Error('No recording exists');this.stopAll();return this.completion;}
+ releaseDevices(){this.generation++;const streams=Object.values(this.sources);this.sources={};for(const stream of streams)stream?.getTracks().forEach(t=>t.stop());if(this.state!=='recording'&&this.state!=='checking'&&this.state!=='stopped'&&this.state!=='failed')this.state='idle';this.notify();}
+ dispose(){this.disposed=true;this.generation++;this.notify=()=>{};if(this.deadline)clearTimeout(this.deadline);if(this.completion)this.stopAll();this.releaseDevices();}
 }
