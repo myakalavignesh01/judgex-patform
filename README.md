@@ -34,7 +34,7 @@ Public frontend build values are VITE_SUPABASE_URL, VITE_SUPABASE_PUBLISHABLE_KE
 
 This is an implementation in progress. Service accounts, real provider tests, production monitoring, automated retention, long-media segmentation, billing, recovery/accessibility/load tests and other PRD items remain pending. Exact status: [requirements status](docs/REQUIREMENTS_STATUS.md).
 
-The inline AI extraction path supports sources up to 15 MB. Larger files are preserved but require manual review or a separate segmented processing path. Private GitHub installation access and live video conferencing are not implemented. No face, gaze, emotion, appearance or accent scoring is used.
+Small sources use inline extraction. Video and larger sources use the provider Files API, with checkpointed two-minute video windows. The default processing limit is 15 minutes per recording, configurable up to one hour; these adapters still need live-provider verification. Private GitHub installation access and live video conferencing are not implemented. No face, gaze, emotion, appearance or accent scoring is used.
 
 ## Source structure
 

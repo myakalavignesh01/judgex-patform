@@ -1,5 +1,16 @@
 # Milestone verification
 
+## Real workspace update — 1 November 2026
+
+- Production frontend at `https://judgex-platform.vercel.app/` now uses build-time Supabase public configuration and opens directly to sign-in.
+- Supabase schema deployment and GitHub CI succeeded. Password recovery and actionable authentication error messages were deployed.
+- A verified real account created `JudgeX Pilot - Workflow Check`, received organizer membership, saved a versioned problem statement and reloaded persisted event data.
+- The live database rejected a rubric total of 101%; restoring 100% saved successfully. The pilot event remains a private draft with registration unpublished and no team results.
+- Frontend/server builds pass. The local suite now contains 35 passing tests, including database authorization, storage boundaries, immutable submissions, release idempotency, recovery links, media-window bounds and stale worker-token rejection.
+- Gemini/Resend/scanner calls remain unverified with real accounts. The API/worker host is not yet connected. No real camera/microphone recording or participant result delivery has been tested.
+
+The notes below describe the earlier synthetic demo.
+
 Verified on 1 November 2026.
 
 - TypeScript strict typecheck and production Vite build passed.

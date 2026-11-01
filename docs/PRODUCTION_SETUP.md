@@ -50,7 +50,7 @@ Configure secrets using the host's secret manager:
 
 The scanner receives raw file bytes by authenticated POST and must return JSON `{ "clean": true }` only after a successful scan. It must reject malware, timeouts, and unsupported formats. Without a scanner, uploads remain pending and cannot be locked into a submission. Text-only project submissions can still run the human-scored flow.
 
-The server supports small, bounded media requests. Its current Gemini inline extraction path accepts at most 15 MB per source. Larger uploaded files remain preserved but require manual review or a separately implemented segmented processing path. Do not advertise long-video automation yet.
+Small sources use inline extraction up to 15 MB. Video and larger sources use the provider Files API. Video is extracted in two-minute windows with source timestamps, atomic evidence/checkpoint commits and per-claim worker tokens. MAX_PRESENTATION_SECONDS defaults to 900 (15 minutes), with a hard ceiling of 3600. Capture stops at 15 minutes or about 90 MB in the browser. Provider preparation is polled through durable queue checkpoints; it does not consume failure attempts. These paths are implemented but still require live Gemini/recording tests before production use. Provider uploads are deleted after successful extraction where possible; operators must review provider retention and failure-cleanup behavior.
 
 Check `/health` for connection configuration flags. This endpoint reports configuration presence, not provider account validity or successful delivery.
 

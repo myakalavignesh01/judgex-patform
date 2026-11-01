@@ -5,6 +5,7 @@ import {ingestPublicRepository} from './repository.ts';
 import {encryptInvitation,decryptInvitation,sendInvitationEmail} from './invitations.ts';
 import {chunkText,embed} from './retrieval.ts';
 import {verifyEmailWebhook} from './webhooks.ts';
+import {uploadProviderFile,getProviderFile,deleteProviderFile,extractProviderWindow,mediaWindows} from './media.ts';
 const env=process.env;
 const required=['SUPABASE_URL','SUPABASE_PUBLISHABLE_KEY','SUPABASE_SERVICE_ROLE_KEY','APP_ORIGIN'];
 for(const name of required)if(!env[name])throw Error('Missing server configuration: '+name);
@@ -27,6 +28,30 @@ async function completeArtifact(id:string,token:string){const [a]=await query('a
  if(!env.MALWARE_SCAN_URL||!env.MALWARE_SCAN_TOKEN)throw Error('Upload preserved. Malware scanning must be configured before this file can enter evaluation.');
  const scannerUrl=new URL(env.MALWARE_SCAN_URL);if(scannerUrl.protocol!=='https:')throw Error('Scanner requires HTTPS');const scan=await fetch(scannerUrl,{method:'POST',headers:{Authorization:'Bearer '+env.MALWARE_SCAN_TOKEN,'Content-Type':a.mime_type},body:bytes,signal:AbortSignal.timeout(90000)});const result=await scan.json();if(!scan.ok||result.clean!==true){await update('artifacts','id=eq.'+a.id,{scan_state:'rejected'});throw Error('File could not pass the malware scan');}
  await update('artifacts','id=eq.'+a.id,{scan_state:'clean',checksum:createHash('sha256').update(bytes).digest('hex')});return {status:'clean'};
+}
+class JobYield extends Error{delay:number;constructor(delay=1000){super('Processing checkpoint saved');this.delay=delay;}}
+async function extractRemoteArtifact(a:any,submissionId:string,job:any){
+ let [checkpoint]=await query('artifact_processing','artifact_id=eq.'+a.id);if(checkpoint?.state==='complete')return;
+ if(!checkpoint?.provider_file_name||(checkpoint.provider_expiration&&new Date(checkpoint.provider_expiration).getTime()<Date.now()+60000)){
+  const uploaded=await uploadProviderFile(provider,await artifactBytes(a),a.mime_type);
+  try{checkpoint=await db('/rest/v1/rpc/register_media_file',{method:'POST',body:JSON.stringify({job_id_input:job.id,lease_token_input:job.lease_token,artifact_id_input:a.id,name_input:uploaded.name,uri_input:uploaded.uri,expiration_input:uploaded.expirationTime||null})});}catch(e){try{await deleteProviderFile(provider,uploaded.name)}catch{}throw e;}
+ }
+ const file=await getProviderFile(provider,checkpoint.provider_file_name);
+ if(file.state==='PROCESSING'){if(Date.now()-new Date(checkpoint.updated_at).getTime()>30*60000)throw Error('Provider media preparation timed out. Use manual review or retry later.');throw new JobYield(15000);}
+ if(file.state!=='ACTIVE')throw Error('Provider media preparation failed');
+ const video=a.mime_type.startsWith('video/');
+ const maximum=Math.min(3600,Math.max(120,Number(env.MAX_PRESENTATION_SECONDS||900)));
+ const duration=video?Number((file.videoMetadata?.videoDuration||'').replace(/s$/,'')):1;
+ const windows=video?mediaWindows(duration,120,maximum):[{start:0,end:1}];
+ const window=windows.find(w=>w.start>=Number(checkpoint.next_offset_seconds));
+ if(window){
+  const extracted=await extractProviderWindow(provider,file,video?window:undefined);if(extracted.items.length>256||extracted.limitations.length>32)throw Error('Extracted evidence exceeds the per-segment quota');
+  extracted.items.push(...extracted.limitations.map(text=>({text:'Extraction limitation: '+text,page:null,timestamp:video?window.start:null})));
+  await db('/rest/v1/rpc/commit_media_segment',{method:'POST',body:JSON.stringify({job_id_input:job.id,lease_token_input:job.lease_token,artifact_id_input:a.id,submission_id_input:submissionId,start_input:window.start,end_input:window.end,duration_input:duration,items_input:extracted.items.map(item=>({...item,text:item.text.slice(0,20000)}))})});
+  if(window.end<duration)throw new JobYield();
+ }
+ await update('artifact_processing','artifact_id=eq.'+a.id,{state:'complete',updated_at:new Date().toISOString()});
+ try{await deleteProviderFile(provider,file.name);await update('artifact_processing','artifact_id=eq.'+a.id,{provider_uri:null})}catch{console.warn('Provider media cleanup pending; source expires at provider retention limit');}
 }
 async function processJob(job:any){
  if(job.kind==='email'&&job.payload.invitationId){
@@ -53,6 +78,7 @@ async function processJob(job:any){
  if(job.kind==='extract'){
   const artifacts=await query('artifacts','submission_id=eq.'+submissionId);
   for(const artifact of artifacts){if(artifact.scan_state!=='clean')throw Error('Artifact has not passed scanning');
+   if(artifact.mime_type.startsWith('video/')||artifact.size_bytes>15*1024*1024){await extractRemoteArtifact(artifact,submissionId,job);continue;}
    if((await query('evidence_items','artifact_id=eq.'+artifact.id)).length)continue;
    const bytes=await artifactBytes(artifact);const extracted=await extractVisualEvidence(provider,{mimeType:artifact.mime_type,base64:Buffer.from(bytes).toString('base64')},artifact.kind==='recording'?'presentation':'slides');
    const items=extracted.items.map((item:any,index:number)=>({extraction_key:artifact.id+':'+index,submission_id:submissionId,artifact_id:artifact.id,source:artifact.object_key,content:item.text,page:item.page??null,timestamp_seconds:item.timestamp??null}));if(items.length)await insert('evidence_items',items);
@@ -78,7 +104,7 @@ async function processJob(job:any){
  throw Error('This job type requires an implementation before it can be processed');
 }
 let draining=false;
-async function drain(){if(draining)return;draining=true;try{for(let count=0;count<5;count++){const [job]=await db('/rest/v1/rpc/claim_job',{method:'POST',body:'{}'});if(!job)break;const heartbeat=setInterval(()=>update('jobs','id=eq.'+job.id+'&attempts=eq.'+job.attempts+'&status=eq.running',{lease_until:new Date(Date.now()+300000).toISOString()}).catch(()=>{}),60000);try{await processJob(job);await update('jobs','id=eq.'+job.id+'&attempts=eq.'+job.attempts,{status:'complete',lease_until:null,last_error:null})}catch(e){await update('jobs','id=eq.'+job.id+'&attempts=eq.'+job.attempts,{status:job.attempts>=5?'dead':'retry',lease_until:null,last_error:(e as Error).message,available_at:new Date(Date.now()+Math.min(3600000,30000*2**job.attempts)+Math.random()*5000).toISOString()});}finally{clearInterval(heartbeat)}}}finally{draining=false}}
+async function drain(){if(draining)return;draining=true;try{for(let count=0;count<5;count++){const [job]=await db('/rest/v1/rpc/claim_job',{method:'POST',body:'{}'});if(!job)break;const heartbeat=setInterval(()=>update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token+'&status=eq.running',{lease_until:new Date(Date.now()+300000).toISOString()}).catch(()=>{}),60000);try{await processJob(job);await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:'complete',lease_until:null,lease_token:null,last_error:null})}catch(e){if(e instanceof JobYield){await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:'queued',attempts:Math.max(0,job.attempts-1),lease_until:null,lease_token:null,last_error:null,available_at:new Date(Date.now()+e.delay).toISOString()});}else await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:job.attempts>=5?'dead':'retry',lease_until:null,lease_token:null,last_error:(e as Error).message,available_at:new Date(Date.now()+Math.min(3600000,30000*2**job.attempts)+Math.random()*5000).toISOString()});}finally{clearInterval(heartbeat)}}}finally{draining=false}}
 const server=createServer(async(req,res)=>{
  const requestId=crypto.randomUUID();res.setHeader('X-Request-Id',requestId);res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.headers.origin===origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');}

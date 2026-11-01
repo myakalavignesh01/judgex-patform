@@ -6,6 +6,7 @@ export class PresentationCapture {
  private parts:Blob[]=[];
  state:RecordingState='idle';
  startedAt:number|null=null;
+ get previewStream(){return this.streams.at(-1)||null;}
  async start(consent:{accepted:boolean;policyVersion:string;screen:boolean},onState:(state:RecordingState)=>void){
   if(!consent.accepted||!consent.policyVersion)throw Error('Accept the recording policy before starting');
   if(this.state==='recording')throw Error('A recording is already running');
@@ -29,5 +30,5 @@ export class PresentationCapture {
   return new Blob(this.parts,{type:recorder.mimeType});
  }
  releaseDevices(){for(const stream of this.streams)for(const track of stream.getTracks())track.stop();this.streams=[];}
- dispose(){if(this.recorder?.state==='recording')this.recorder.stop();this.releaseDevices();this.parts=[];}
+ dispose(){if(this.recorder){this.recorder.ondataavailable=null;this.recorder.onstop=null;this.recorder.onerror=null;if(this.recorder.state==='recording')this.recorder.stop();}this.releaseDevices();this.parts=[];}
 }

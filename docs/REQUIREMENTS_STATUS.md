@@ -11,8 +11,8 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | Teams | Email-bound invitation acceptance, encrypted invitation email jobs, revoke, member directory, team-size/duplicate constraints | Decline/resend UX and member management |
 | Projects | Autosave, serialized saves, save-before-lock, architecture/repository fields, immutable snapshot/checksum/rubric links | Rich technology/declaration fields and submission revision policy |
 | Uploads | Private files, MIME/size/quota checks, scanner adapter, validation states, signed downloads, unlocked-file removal | Scanner configuration, resumable uploads and progress/retry improvements |
-| Presentations | Scheduling/check-in, consent, camera/microphone/screen capture, timer, local playback/download/upload | Live conferencing is not implemented; segmentation and live captions remain pending |
-| Vision/transcription | Gemini extraction for slides/images/PDF and short consented media, page/timestamp provenance | Provider validation, large-media processing and multilingual quality tests |
+| Presentations | Scheduling/check-in, consent, camera/microphone/screen capture, timer, local playback/download/upload | Live conferencing and live captions remain pending; recording-window processing is implemented but unverified with a live provider |
+| Vision/transcription | Gemini extraction for slides/images/PDF and consented media, checkpointed video windows, page/timestamp provenance | Provider validation and multilingual quality tests |
 | Repository evidence | Public GitHub read-only pinned snapshots, bounded text selection, no execution | Private GitHub App installation flow |
 | RAG | Chunks, pgvector, keyword/vector hybrid retrieval, normalized embeddings, submission authorization | Provider setup, retrieval/citation quality evaluation, reindex strategy |
 | Agents | Structured assessment, citation/score validation, uncertainty, insufficient evidence, provenance | Independent consistency/feedback stages, calibration and adversarial evals |
@@ -24,6 +24,6 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | SaaS/billing | Initial server/RPC team/file/indexing/assessment limits | Plan metering, invoicing, payments, budget enforcement and subscriptions |
 | Security/governance | RLS, server secrets, untrusted-evidence boundary, consent, local authorization tests | API rate limits/CSP, production security review, rotation/incident/retention procedures |
 | Operations | Durable records, recoverable jobs, manual scoring during AI outage | Monitoring/alerts, backups/restore, rollback, load/accessibility checks |
-| CI | Frontend/server typechecks, production build, 29 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
+| CI | Frontend/server typechecks, production build, 35 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
 
 An implemented adapter is not a connected service. Local tests are not production guarantees. No real participant data should be used until external setup and pilot gates are verified.

@@ -87,4 +87,24 @@ test('database enforces tenant, invitation, submission, approval and release bou
   await db.query("insert into jobs(event_id,team_id,kind,idempotency_key,status,attempts,lease_until) values($1,$2,'extract','expired-test','running',5,now()-interval '1 hour')",[event1,team1]);await db.query("insert into jobs(event_id,team_id,kind,idempotency_key) values($1,$2,'extract','ready-test')",[event1,team1]);
   const claimed=await db.query<{idempotency_key:string;attempts:number}>('select * from claim_job()');assert.equal(claimed.rows[0].idempotency_key,'ready-test');assert.equal(claimed.rows[0].attempts,1);assert.equal(await scalar("select status from jobs where idempotency_key='expired-test'"),'dead');
  });
+ await t.test('media checkpoints commit once and reject stale worker leases',async()=>{
+  await db.exec("reset role;update jobs set status='complete'");
+  const artifact=await scalar("insert into artifacts(team_id,submission_id,object_key,mime_type,size_bytes,kind,scan_state,created_by) values($1,$2,'media-test.webm','video/webm',100,'recording','clean',$3) returning id",[team1,submission1,ids[1]]);
+  await db.query('insert into artifact_processing(artifact_id) values($1)',[artifact]);
+  await db.query("insert into jobs(event_id,team_id,kind,payload,idempotency_key) values($1,$2,'extract',$3,'media-checkpoint-test')",[event1,team1,JSON.stringify({submissionId:submission1})]);
+  const first=(await db.query<Record<string,any>>('select * from claim_job()')).rows[0];
+  const sql='select commit_media_segment($1,$2,$3,$4,$5,$6,240,$7)';
+  const args=[first.id,first.lease_token,artifact,submission1,0,120,JSON.stringify([{text:'Visible architecture diagram',page:null,timestamp:60}])];
+  await assert.rejects(db.query(sql,[first.id,ids[5],...args.slice(2)]));assert.equal(await scalar(sql,args),true);assert.equal(await scalar(sql,args),false);
+  assert.equal(Number(await scalar('select count(*) from evidence_items where artifact_id=$1',[artifact])),1);
+  await db.query("update jobs set status='queued',lease_token=null,lease_until=null where id=$1",[first.id]);
+  const second=(await db.query<Record<string,any>>('select * from claim_job()')).rows[0];assert.notEqual(first.lease_token,second.lease_token);
+  await assert.rejects(db.query("select register_media_file($1,$2,$3,'files/test','https://generativelanguage.googleapis.com/v1beta/files/test')",[first.id,first.lease_token,artifact]));
+  await db.query("select register_media_file($1,$2,$3,'files/test','https://generativelanguage.googleapis.com/v1beta/files/test')",[first.id,second.lease_token,artifact]);assert.equal(Number(await scalar('select next_offset_seconds from artifact_processing where artifact_id=$1',[artifact])),120);
+  const next=[first.id,second.lease_token,artifact,submission1,120,240,JSON.stringify([{text:'Demonstrated working prototype',page:null,timestamp:180}])];
+  await assert.rejects(db.query(sql,[first.id,first.lease_token,...next.slice(2)]));
+  await assert.rejects(db.query(sql,[...next.slice(0,6),JSON.stringify([{text:'Wrong timestamp',page:null,timestamp:999}])]));
+  assert.equal(await scalar(sql,next),true);assert.equal(await scalar('select state from artifact_processing where artifact_id=$1',[artifact]),'complete');
+  await as(1);await assert.rejects(db.query(sql,next));
+ });
 });
