@@ -22,3 +22,12 @@ test('failed refresh clears the session once without recursive logout',async t=>
 test('recovery links are requested for the current application origin',async t=>{
  browser(t);const client=new Client(config);let target='';client.request=async path=>{target=path;return {}};await client.recover('owner@example.test');assert.equal(new URL('https://test-project.supabase.co'+target).searchParams.get('redirect_to'),'https://judgex.example/');
 });
+test('parallel authenticated requests share one token refresh',async t=>{
+ const b=browser(t);b.values.set('judgex.session',JSON.stringify({access_token:'expired',refresh_token:'refresh',expires_at:1}));const originalFetch=globalThis.fetch;t.after(()=>globalThis.fetch=originalFetch);let refreshes=0;
+ globalThis.fetch=async(input,init)=>{if(String(input).includes('refresh_token')){refreshes++;await new Promise(resolve=>setTimeout(resolve,10));return Response.json({access_token:'fresh',refresh_token:'rotated',expires_in:3600});}assert.equal((init?.headers as Record<string,string>).Authorization,'Bearer fresh');return Response.json({id:'user'});};
+ const client=new Client(config);await Promise.all(Array.from({length:12},()=>client.user()));assert.equal(refreshes,1);
+});
+test('database lists read subsequent pages rather than silently truncating',async t=>{
+ browser(t);const client=new Client(config);const paths:string[]=[];client.request=async path=>{paths.push(path);return path.includes('offset=0')?Array.from({length:500},(_,id)=>({id})):[{id:500}];};
+ assert.equal((await client.list('projects','team_id=eq.synthetic')).length,501);assert.equal(paths.length,2);assert(paths[1].includes('offset=500'));assert(paths.every(p=>p.includes('team_id=eq.synthetic')));
+});

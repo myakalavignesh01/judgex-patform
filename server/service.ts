@@ -1,3 +1,4 @@
+import {RequestLimiter} from './rate-limit.ts';
 import {createServer} from 'node:http';
 import {createHash,timingSafeEqual} from 'node:crypto';
 import {extractVisualEvidence,sendResultEmail} from './assessment.ts';
@@ -108,13 +109,15 @@ async function processJob(job:any){
 }
 let draining=false;
 async function drain(){if(draining)return;draining=true;try{for(let count=0;count<5;count++){const [job]=await db('/rest/v1/rpc/claim_job',{method:'POST',body:'{}'});if(!job)break;const heartbeat=setInterval(()=>update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token+'&status=eq.running',{lease_until:new Date(Date.now()+300000).toISOString()}).catch(()=>{}),60000);try{await processJob(job);await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:'complete',lease_until:null,lease_token:null,last_error:null})}catch(e){if(e instanceof JobYield){await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:'queued',attempts:Math.max(0,job.attempts-1),lease_until:null,lease_token:null,last_error:null,available_at:new Date(Date.now()+e.delay).toISOString()});}else await update('jobs','id=eq.'+job.id+'&lease_token=eq.'+job.lease_token,{status:job.attempts>=5?'dead':'retry',lease_until:null,lease_token:null,last_error:(e as Error).message,available_at:new Date(Date.now()+Math.min(3600000,30000*2**job.attempts)+Math.random()*5000).toISOString()});}finally{clearInterval(heartbeat)}}}finally{draining=false}}
+const requestLimiter=new RequestLimiter();
 const server=createServer(async(req,res)=>{
- const requestId=crypto.randomUUID();res.setHeader('X-Request-Id',requestId);res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
+ const started=Date.now();const requestId=crypto.randomUUID();res.on('finish',()=>console.log(JSON.stringify({event:'http.request',requestId,method:req.method,route:['/health','/v1/invitations/send','/v1/artifacts/complete','/v1/assessments','/webhooks/resend','/internal/jobs'].includes(req.url||'')?req.url:'unknown',status:res.statusCode,durationMs:Date.now()-started}))); res.setHeader('X-Request-Id',requestId);res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');
  if(req.headers.origin===origin){res.setHeader('Access-Control-Allow-Origin',origin);res.setHeader('Vary','Origin');res.setHeader('Access-Control-Allow-Headers','Authorization, Content-Type');res.setHeader('Access-Control-Allow-Methods','GET, POST, OPTIONS');}
  if(req.method==='OPTIONS'){res.writeHead(204);res.end();return;}
  const json=(status:number,data:unknown)=>{res.writeHead(status,{'Content-Type':'application/json'});res.end(JSON.stringify(data))};
  try{
-  if(req.url==='/health'){json(200,{status:'ok',integrations:{gemini:!!provider.key&&!!provider.model,email:!!env.RESEND_API_KEY&&!!env.RESEND_FROM,scanner:!!env.MALWARE_SCAN_URL}});return;}
+  if(!requestLimiter.allow(req.socket.remoteAddress||'unknown')){res.setHeader('Retry-After','60');json(429,{error:'Too many requests. Try again shortly.',requestId});return;}
+  if(req.url==='/health'){json(200,{status:'ok',integrations:{gemini:!!provider.key&&!!provider.model,email:!!env.RESEND_API_KEY&&!!env.RESEND_FROM,scanner:!!env.MALWARE_SCAN_URL&&!!env.MALWARE_SCAN_TOKEN,worker:env.RUN_WORKER==='true',semanticRetrieval:!!provider.key&&!!env.GEMINI_EMBEDDING_MODEL}});return;}
   if(req.url==='/webhooks/resend'&&req.method==='POST'){
    const raw=await rawBody(req);const header=(name:string)=>String(req.headers[name]||'');
    const event=verifyEmailWebhook(raw,{'svix-id':header('svix-id'),'svix-timestamp':header('svix-timestamp'),'svix-signature':header('svix-signature')},env.RESEND_WEBHOOK_SECRET||'');
@@ -124,6 +127,8 @@ const server=createServer(async(req,res)=>{
   if(req.headers.origin&&req.headers.origin!==origin){json(403,{error:'Origin is not allowed'});return;}
   const token=(req.headers.authorization||'').replace(/^Bearer /,'');if(!token){json(401,{error:'Sign-in required'});return;}
   const user=await db('/auth/v1/user',{},token);if(!user?.email_confirmed_at){json(401,{error:'Verified sign-in required'});return;}
+  if(!['/v1/invitations/send','/v1/artifacts/complete','/v1/assessments'].includes(req.url||'')||req.method!=='POST'){json(404,{error:'Route not found',requestId});return;}
+  const allowed=await db('/rest/v1/rpc/consume_api_budget',{method:'POST',body:JSON.stringify({user_id_input:user.id,operation_input:req.url})});if(!allowed){res.setHeader('Retry-After','60');json(429,{error:'Request limit reached. Try again in a minute.',requestId});return;}
   const input=await body(req);
   if(req.method==='POST'&&req.url==='/v1/invitations/send'){
    if(!env.RESEND_API_KEY||!env.RESEND_FROM||!env.INVITATION_ENCRYPTION_KEY){json(503,{error:'Configure email delivery and invitation encryption first'});return;}
