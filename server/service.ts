@@ -1,3 +1,4 @@
+import {sendScheduleEmail} from './schedule-mail.ts';
 import {RequestLimiter} from './rate-limit.ts';
 import {createServer} from 'node:http';
 import {createHash,timingSafeEqual} from 'node:crypto';
@@ -56,6 +57,14 @@ async function extractRemoteArtifact(a:any,submissionId:string,job:any){
  try{await deleteProviderFile(provider,file.name);await update('artifact_processing','artifact_id=eq.'+a.id,{provider_uri:null})}catch{console.warn('Provider media cleanup pending; source expires at provider retention limit');}
 }
 async function processJob(job:any){
+ if(job.kind==='email'&&job.payload.scheduleId){
+  const [n]=await query('notifications','id=eq.'+job.payload.notificationId);if(!n||n.status!=='queued')return;
+  const [slot]=await query('presentation_slots','id=eq.'+job.payload.scheduleId),[event]=await query('events','id=eq.'+job.event_id);
+  const members=await query('team_memberships','team_id=eq.'+job.team_id+'&user_id=eq.'+job.payload.userId);
+  if(!slot||slot.team_id!==job.team_id||slot.version!==job.payload.scheduleVersion||!event||['released','archived'].includes(event.status)||!members.length||(job.payload.messageKind==='presentation_reminder'&&new Date(slot.starts_at).getTime()<Date.now())){await update('notifications','id=eq.'+n.id+'&status=eq.queued',{status:'cancelled',last_error:'Schedule changed, reminder expired or recipient left the team'});return;}
+  const [team]=await query('teams','id=eq.'+job.team_id);const user=await db('/auth/v1/admin/users/'+job.payload.userId);if(!user.email||!user.email_confirmed_at)throw Error('Schedule recipient is not verified');
+  const sent=await sendScheduleEmail({key:env.RESEND_API_KEY||'',from:env.RESEND_FROM||'',origin},{id:job.idempotency_key,to:user.email,eventName:event.name,teamName:team.name,startsAt:slot.starts_at,timezone:event.timezone,room:slot.room,kind:job.payload.messageKind});await update('notifications','id=eq.'+n.id+'&status=eq.queued',{status:'sent',provider_id:sent.id});return;
+ }
  if(job.kind==='email'&&job.payload.invitationId){
   const [invitation]=await query('invitations','id=eq.'+job.payload.invitationId);if(!invitation||invitation.status!=='pending'||new Date(invitation.expires_at)<new Date())return;
   const [team]=await query('teams','id=eq.'+invitation.team_id),[event]=await query('events','id=eq.'+job.event_id);
@@ -98,7 +107,7 @@ async function processJob(job:any){
    const vector=env.GEMINI_EMBEDDING_MODEL?await embed({key:provider.key,model:env.GEMINI_EMBEDDING_MODEL},text,'RETRIEVAL_DOCUMENT'):null;
    await db('/rest/v1/evidence_chunks?on_conflict=evidence_id,ordinal',{method:'POST',headers:{Prefer:'resolution=ignore-duplicates'},body:JSON.stringify({evidence_id:e.id,submission_id:submissionId,ordinal,body:text,embedding:vector?'['+vector.join(',')+']':null,embedding_model:env.GEMINI_EMBEDDING_MODEL||null})});
   }
-  const snippets=new Map<string,any>();for(const criterion of rubric.criteria){const queryText=criterion.name+' '+(criterion.description||'');const vector=env.GEMINI_EMBEDDING_MODEL?await embed({key:provider.key,model:env.GEMINI_EMBEDDING_MODEL},queryText,'RETRIEVAL_QUERY'):null;const matches=await db('/rest/v1/rpc/retrieve_evidence',{method:'POST',body:JSON.stringify({submission_id_input:submissionId,query_text:queryText,embedding_input:vector?'['+vector.join(',')+']':null,limit_input:8})});for(const match of matches)snippets.set(match.chunk_id,match);}
+  const snippets=new Map<string,any>();for(const criterion of rubric.criteria){const queryText=criterion.name+' '+(criterion.description||'')+' '+(criterion.evidence_requirements||'');const vector=env.GEMINI_EMBEDDING_MODEL?await embed({key:provider.key,model:env.GEMINI_EMBEDDING_MODEL},queryText,'RETRIEVAL_QUERY'):null;const matches=await db('/rest/v1/rpc/retrieve_evidence',{method:'POST',body:JSON.stringify({submission_id_input:submissionId,query_text:queryText,embedding_input:vector?'['+vector.join(',')+']':null,limit_input:8})});for(const match of matches)snippets.set(match.chunk_id,match);}
   const grounded=new Map<string,any>();for(const match of [...snippets.values()].slice(0,32)){const entry=grounded.get(match.evidence_id)||{id:match.evidence_id,text:'',source:match.source,page:match.page,timestamp:match.timestamp_seconds};entry.text+=(entry.text?'\n[…]\n':'')+match.body;grounded.set(match.evidence_id,entry);}
   const [saved]=await query('assessment_runs','job_id=eq.'+job.id);
   await runReview(provider,rubric.criteria,[...grounded.values()],saved?.output||{},async(stage,status,output,error)=>{

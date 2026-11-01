@@ -6,10 +6,11 @@
 - Supabase schema deployment and GitHub CI succeeded. Password recovery and actionable authentication error messages were deployed.
 - A verified real account created `JudgeX Pilot - Workflow Check`, received organizer membership, saved a versioned problem statement and reloaded persisted event data.
 - The live database rejected a rubric total of 101%; restoring 100% saved successfully. The pilot event remains a private draft with registration unpublished and no team results.
-- Frontend/server builds pass. The local suite now contains 48 passing tests, including database authorization, storage boundaries, immutable submissions, release idempotency, recovery links, media-window bounds and stale worker-token rejection.
+- Frontend/server builds pass. The local suite now contains 51 passing tests, including database authorization, storage boundaries, immutable submissions, release idempotency, recovery links, media-window bounds and stale worker-token rejection.
 - Event lifecycle transitions passed local authorization and released-scorecard retention tests; hosted verification is pending deployment.
 - Separate AI assessment, consistency and feedback stages passed failure/resume, citation rejection, stage-order and stale-lease checks with local fixtures. Live Gemini behavior remains unverified.
 - Completeness audit fixes passed event-window/deadline preservation, project-detail snapshot, AI-difference provenance, invitation-decline, session-refresh concurrency, API-budget, closed-event and export authorization checks. Browser checks for this revision are still pending.
+- Presentation tests cover room overlap, notification idempotency/supersession, state permissions, immutable Q&A/checksum, rubric guidance and priority tie-breaks. Local component QA verified saved date values and schedule form interaction with synthetic fixtures, no console warnings/errors, and no mobile horizontal overflow (375 CSS-pixel content/client widths). This does not replace a hosted multi-account test.
 - Gemini/Resend/scanner calls remain unverified with real accounts. The API/worker host is not yet connected. No real camera/microphone recording or participant result delivery has been tested.
 
 The notes below describe the earlier synthetic demo.
