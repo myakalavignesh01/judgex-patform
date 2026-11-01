@@ -18,6 +18,8 @@ Reviewed 1 November 2026 against JudgeX Production PRD v1.0 (31 October 2026), t
 - Added conflict-checked presentation slots, queue progression, opt-in schedule/reminder outbox jobs with revision cancellation, and project-defence evidence snapshots. Added rubric guidance and deterministic tie-break priorities across organizer ordering, public totals and exports.
 - Replaced the setup health message that discarded its own output with visible configuration states. Presence of settings does not establish that provider accounts work.
 
+The user-supplied JUDGEX LEO reference was inspected on 1 November: dashboard, presentation controls and successful-backend-only score state. The five-specialist flow from the supplied diagram is now implemented in the JudgeX worker and organizer review UI. Provider execution remains unverified. Released corrections now append versions and queue notices while preserving original scorecards.
+
 ## Remaining work by PRD area
 
 | Area | Source status | What is still needed |
@@ -33,18 +35,18 @@ Reviewed 1 November 2026 against JudgeX Production PRD v1.0 (31 October 2026), t
 | Vision/transcription | Gemini OCR/chart/diagram/media extraction and checkpointed windows | Provider credentials/host, real files and languages, source-quality checks, consent/device tests and cleanup verification |
 | Repository ingestion | Public pinned GitHub snapshots, read-only, no execution | Private-repository GitHub App authorization, revocation and installation UX |
 | RAG | Chunking, pgvector, hybrid retrieval, authorization | Embedding configuration, golden-set recall/citation precision, model changes and reindexing. Keyword fallback is not semantic RAG |
-| Agents | Separate assessment, consistency review and feedback calls; validation/checkpoints | Live provider tests, calibration, adversarial/prompt-injection fixtures, semantic citation relevance checks, quality/cost evaluation |
+| Agents | Five specialist reviewers with criterion assignments, median combination, consistency/feedback calls and validated checkpoints | Live provider tests, calibration, adversarial/prompt-injection fixtures, semantic citation relevance checks, quality/cost evaluation |
 | Rubrics | Weights, bounds, frozen versions, editable descriptions/anchors/evidence requirements and deterministic priority tie-breaks | Later version publication UI and calibration |
-| Human decisions | Deterministic totals, approval, AI-difference reasons/provenance | Accept/reject/reassess controls, resolved-flag workflow and separately versioned released-decision revisions |
+| Human decisions | Deterministic totals, approval, AI-difference reasons/provenance, append-only post-release corrections, expected-version concurrency checks, correction outbox and decision history | Accept/reject/reassess controls and resolved-flag workflow |
 | Dashboards | Role workspaces, readiness, jobs, delivery, periodic refresh | Realtime subscriptions, search/filter/pagination controls, aggregate exception queues and broader UX checks |
-| Results/reports | Private release, public opt-in totals, printable reports, audited CSV | Server-generated private PDFs, signed export artifacts, revised-decision delivery and certificate branding/identity policy |
-| Appeals | Time window, reason, organizer response | Criterion-selection UX, appeal history and versioned score correction after release |
+| Results/reports | Private release, public opt-in totals, printable reports, audited CSV | Server-generated private PDFs, signed export artifacts, live revised-decision delivery verification and certificate branding/identity policy |
+| Appeals | Time window, criterion/process selection, decision-version binding, append-only organizer response history and linked score corrections | Live hosted participant/organizer checks and additional appeal-notification templates |
 | Automation/mail | Durable queue, leases/fencing, retry/dead letters, encrypted invitations, release outbox, signed delivery callbacks | Hosted worker; verified sender; receipt/processing/appeal templates; real delivery/bounce tests |
 | Plans/billing | Some team/file/indexing/assessment limits | Organization plan entitlements, event/seat/minute/storage/AI metering, budget enforcement, pilot invoicing and later payments/webhooks |
 | Retention/privacy | Recording policy/version and consent records | Actual retention/deletion jobs, backup expiry/legal-hold procedure, request handling and reviewed privacy/terms/subprocessor information |
 | Security | RLS, bounded RPCs, secrets server-side, local isolation tests, CSP/API budgets | Hosted IDOR/Auth/Storage/API suite, account abuse controls, MFA, secrets/dependency scans, key rotation and independent review |
 | Monitoring/operations | Request metadata logs, durable jobs and health configuration flags | Metrics/traces/alerts, worker freshness and queue-age monitoring, incident/support contacts, backup/restore/rollback drills |
-| Release quality | 51 passing local tests and frontend/server build at this audit stage | Desktop/mobile hosted E2E with distinct accounts, accessibility review, 100-user load test, AI golden set and a completed real pilot |
+| Release quality | 57 passing local tests and frontend/server build at this audit stage | Desktop/mobile hosted E2E with distinct accounts, accessibility review, 100-user load test, AI golden set and a completed real pilot |
 
 ## External setup that code cannot substitute for
 

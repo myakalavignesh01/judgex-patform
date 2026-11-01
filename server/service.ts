@@ -3,7 +3,7 @@ import {RequestLimiter} from './rate-limit.ts';
 import {createServer} from 'node:http';
 import {createHash,timingSafeEqual} from 'node:crypto';
 import {extractVisualEvidence,sendResultEmail} from './assessment.ts';
-import {runReview} from './review.ts';
+import {runSpecialistReview} from './specialists.ts';
 import {ingestPublicRepository} from './repository.ts';
 import {encryptInvitation,decryptInvitation,sendInvitationEmail} from './invitations.ts';
 import {chunkText,embed} from './retrieval.ts';
@@ -73,9 +73,9 @@ async function processJob(job:any){
  if(job.kind==='email'){
   const [n]=await query('notifications','id=eq.'+job.payload.notificationId);if(!n||n.status!=='queued')return;
   const [event]=await query('events','id=eq.'+job.event_id);if(!event?.released_at)throw Error('Results are not released');
-  const [card]=await query('approved_scorecards','id=eq.'+job.payload.scorecardId);if(!card)throw Error('Approved scorecard missing');
+  const [card]=await query('effective_scorecards','id=eq.'+job.payload.scorecardId);if(!card)throw Error('Approved scorecard missing');
   const user=await db('/auth/v1/admin/users/'+job.payload.userId);if(!user.email)throw Error('Recipient has no email');
-  const sent=await sendResultEmail({key:env.RESEND_API_KEY||'',from:env.RESEND_FROM||'',origin},{id:job.idempotency_key,to:user.email,eventName:event.name,scorecardId:card.id});await update('notifications','id=eq.'+n.id,{status:'sent',provider_id:sent.id});return;
+  const sent=await sendResultEmail({key:env.RESEND_API_KEY||'',from:env.RESEND_FROM||'',origin},{id:job.idempotency_key,to:user.email,eventName:event.name,scorecardId:card.id,decisionVersion:job.payload.decisionVersion});await update('notifications','id=eq.'+n.id,{status:'sent',provider_id:sent.id});return;
  }
  const submissionId=job.payload.submissionId;
  if(!submissionId)throw Error('Job lacks a submission');
@@ -110,7 +110,7 @@ async function processJob(job:any){
   const snippets=new Map<string,any>();for(const criterion of rubric.criteria){const queryText=criterion.name+' '+(criterion.description||'')+' '+(criterion.evidence_requirements||'');const vector=env.GEMINI_EMBEDDING_MODEL?await embed({key:provider.key,model:env.GEMINI_EMBEDDING_MODEL},queryText,'RETRIEVAL_QUERY'):null;const matches=await db('/rest/v1/rpc/retrieve_evidence',{method:'POST',body:JSON.stringify({submission_id_input:submissionId,query_text:queryText,embedding_input:vector?'['+vector.join(',')+']':null,limit_input:8})});for(const match of matches)snippets.set(match.chunk_id,match);}
   const grounded=new Map<string,any>();for(const match of [...snippets.values()].slice(0,32)){const entry=grounded.get(match.evidence_id)||{id:match.evidence_id,text:'',source:match.source,page:match.page,timestamp:match.timestamp_seconds};entry.text+=(entry.text?'\n[…]\n':'')+match.body;grounded.set(match.evidence_id,entry);}
   const [saved]=await query('assessment_runs','job_id=eq.'+job.id);
-  await runReview(provider,rubric.criteria,[...grounded.values()],saved?.output||{},async(stage,status,output,error)=>{
+  await runSpecialistReview(provider,rubric.criteria,[...grounded.values()],saved?.output||{},async(stage,status,output,error)=>{
    await db('/rest/v1/rpc/checkpoint_assessment',{method:'POST',body:JSON.stringify({job_id_input:job.id,lease_token_input:job.lease_token,stage_input:stage,status_input:status,model_input:provider.model,output_input:output??null,error_input:error??null})});
   });return;
  }

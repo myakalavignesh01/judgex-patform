@@ -3,8 +3,8 @@ import type {Assessment,Evidence,RubricCriterion} from './assessment.ts';
 export type ReviewIssue={criterionId:string;severity:'low'|'medium'|'high';explanation:string;evidenceIds:string[]};
 export type ConsistencyReview={summary:string;issues:ReviewIssue[]};
 export type FeedbackReview={summary:string;strengths:string[];improvements:string[];limitations:string[]};
-export type ReviewStage='assessment'|'consistency'|'feedback';
-export type ReviewOutput={assessment?:Assessment;consistency?:ConsistencyReview;feedback?:FeedbackReview};
+export type ReviewStage='technical'|'innovation'|'ux'|'product'|'impact'|'assessment'|'consistency'|'feedback';
+export type ReviewOutput={technical?:Assessment;innovation?:Assessment;ux?:Assessment;product?:Assessment;impact?:Assessment;assessment?:Assessment;consistency?:ConsistencyReview;feedback?:FeedbackReview};
 const strings=(v:unknown):v is string[]=>Array.isArray(v)&&v.length<=30&&v.every(x=>typeof x==='string'&&x.length<=4000);
 export function validateConsistency(value:unknown,criteria:RubricCriterion[],evidence:Evidence[]):ConsistencyReview{
  const v=value as ConsistencyReview;
