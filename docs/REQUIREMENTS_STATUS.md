@@ -15,7 +15,7 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | Vision/transcription | Gemini extraction for slides/images/PDF and consented media, checkpointed video windows, page/timestamp provenance | Provider validation and multilingual quality tests |
 | Repository evidence | Public GitHub read-only pinned snapshots, bounded text selection, no execution | Private GitHub App installation flow |
 | RAG | Chunks, pgvector, keyword/vector hybrid retrieval, normalized embeddings, submission authorization | Provider setup, retrieval/citation quality evaluation, reindex strategy |
-| Agents | Structured assessment, citation/score validation, uncertainty, insufficient evidence, provenance | Independent consistency/feedback stages, calibration and adversarial evals |
+| Agents | Separate assessment, consistency review and feedback stages; citation/score validation, uncertainty, insufficient evidence, provenance and lease-checked retry checkpoints | Live provider validation, calibration and adversarial evals |
 | Human decisions | Server-calculated totals, frozen rubrics, score-change reasons and history, atomic release | AI-override linkage, formal anchors/tie-break UI |
 | Dashboards | Database-backed role workspaces, evidence, jobs, delivery, scorecards and activity | Pagination, realtime updates, exception filters and real-account UX tests |
 | Results/appeals | Time-bound appeals/responses, private scores before release, public opt-in totals, printable scorecards/certificates | Revised released decisions, server PDF artifacts and signed exports |
@@ -24,6 +24,6 @@ Status as of 1 November 2026. This is a real-service implementation in developme
 | SaaS/billing | Initial server/RPC team/file/indexing/assessment limits | Plan metering, invoicing, payments, budget enforcement and subscriptions |
 | Security/governance | RLS, server secrets, untrusted-evidence boundary, consent, local authorization tests | API rate limits/CSP, production security review, rotation/incident/retention procedures |
 | Operations | Durable records, recoverable jobs, manual scoring during AI outage | Monitoring/alerts, backups/restore, rollback, load/accessibility checks |
-| CI | Frontend/server typechecks, production build, 36 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
+| CI | Frontend/server typechecks, production build, 40 local tests including PostgreSQL access checks | CI confirmation for this revision and deployed-provider E2E tests |
 
 An implemented adapter is not a connected service. Local tests are not production guarantees. No real participant data should be used until external setup and pilot gates are verified.

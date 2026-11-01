@@ -107,6 +107,24 @@ test('database enforces tenant, invitation, submission, approval and release bou
   assert.equal(await scalar(sql,next),true);assert.equal(await scalar('select state from artifact_processing where artifact_id=$1',[artifact]),'complete');
   await as(1);await assert.rejects(db.query(sql,next));
  });
+ await t.test('assessment checkpoints enforce stage ordering, leases and participant isolation',async()=>{
+  await as(3);const event=await scalar("select create_event('Review stages','Review Test')");await db.query('select publish_event($1)',[event]);const code=await scalar('select join_code from events where id=$1',[event]);
+  await as(5);await db.query('select join_event($1)',[code]);const team=await scalar("select create_team($1,'Review Team')",[event]);await db.query("select save_project($1,'Review project','A sufficiently detailed abstract for the review pipeline.')",[team]);const sub=await scalar('select lock_submission($1)',[team]);
+  await db.exec("reset role;update jobs set status='complete'");await db.query("insert into jobs(event_id,team_id,kind,payload,idempotency_key) values($1,$2,'assess',$3,'review-stage-test')",[event,team,JSON.stringify({submissionId:sub})]);
+  const j=(await db.query<Record<string,any>>('select * from claim_job()')).rows[0];
+  const sql='select checkpoint_assessment($1,$2,$3,$4,\'test-model\',$5,$6)';const args=[j.id,j.lease_token,'assessment','running',null,null];
+  await as(5);await assert.rejects(db.query(sql,args));await db.exec('reset role');
+  await assert.rejects(db.query(sql,[j.id,ids[0],...args.slice(2)]));await db.query(sql,args);
+  await assert.rejects(db.query(sql,[j.id,j.lease_token,'feedback','running',null,null]));
+  await db.query(sql,[j.id,j.lease_token,'assessment','complete',JSON.stringify({findings:[]}),null]);
+  await db.query(sql,[j.id,j.lease_token,'consistency','failed',null,'Provider unavailable']);assert.equal(await scalar('select status from assessment_runs where job_id=$1',[j.id]),'failed');
+  await db.query("update jobs set status='queued',lease_token=null,lease_until=null where id=$1",[j.id]);const next=(await db.query<Record<string,any>>('select * from claim_job()')).rows[0];
+  await assert.rejects(db.query(sql,[j.id,j.lease_token,'consistency','running',null,null]));
+  await db.query(sql,[j.id,next.lease_token,'consistency','complete',JSON.stringify({summary:'Review',issues:[]}),null]);await db.query(sql,[j.id,next.lease_token,'feedback','complete',JSON.stringify({summary:'Draft'}),null]);
+  assert.equal(Number(await scalar('select count(*) from assessment_runs where job_id=$1',[j.id])),1);assert.equal(await scalar('select status from assessment_runs where job_id=$1',[j.id]),'manual_review');
+  await as(5);assert.equal(Number(await scalar('select count(*) from assessment_runs where job_id=$1',[j.id])),0);
+  await as(3);await db.query("select change_event_state($1,'archive')",[event]);await db.exec('reset role');await assert.rejects(db.query(sql,[j.id,next.lease_token,'feedback','complete',JSON.stringify({summary:'Changed'}),null]));
+ });
  await t.test('event lifecycle is organizer-scoped and archives preserve released team results',async()=>{
   await as(1);await assert.rejects(db.query("select change_event_state($1,'archive')",[event1]));
   await as(3);await db.query("select change_event_state($1,'close_registration')",[event2]);assert.equal(await scalar('select status from events where id=$1',[event2]),'evaluating');await db.query("select change_event_state($1,'reopen_registration')",[event2]);await db.query("select change_event_state($1,'return_to_draft')",[event2]);assert.equal(await scalar('select status from events where id=$1',[event2]),'draft');

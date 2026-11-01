@@ -1,6 +1,7 @@
 import {createServer} from 'node:http';
 import {createHash,timingSafeEqual} from 'node:crypto';
-import {assess,extractVisualEvidence,sendResultEmail} from './assessment.ts';
+import {extractVisualEvidence,sendResultEmail} from './assessment.ts';
+import {runReview} from './review.ts';
 import {ingestPublicRepository} from './repository.ts';
 import {encryptInvitation,decryptInvitation,sendInvitationEmail} from './invitations.ts';
 import {chunkText,embed} from './retrieval.ts';
@@ -98,8 +99,10 @@ async function processJob(job:any){
   }
   const snippets=new Map<string,any>();for(const criterion of rubric.criteria){const queryText=criterion.name+' '+(criterion.description||'');const vector=env.GEMINI_EMBEDDING_MODEL?await embed({key:provider.key,model:env.GEMINI_EMBEDDING_MODEL},queryText,'RETRIEVAL_QUERY'):null;const matches=await db('/rest/v1/rpc/retrieve_evidence',{method:'POST',body:JSON.stringify({submission_id_input:submissionId,query_text:queryText,embedding_input:vector?'['+vector.join(',')+']':null,limit_input:8})});for(const match of matches)snippets.set(match.chunk_id,match);}
   const grounded=new Map<string,any>();for(const match of [...snippets.values()].slice(0,32)){const entry=grounded.get(match.evidence_id)||{id:match.evidence_id,text:'',source:match.source,page:match.page,timestamp:match.timestamp_seconds};entry.text+=(entry.text?'\n[…]\n':'')+match.body;grounded.set(match.evidence_id,entry);}
-  const [run]=await insert('assessment_runs',{submission_id:submissionId,rubric_id:rubric.id,provider:'gemini',model:provider.model,prompt_version:'judgex-assessment-v1',status:'running'});
-  try{const output=await assess(provider,rubric.criteria,[...grounded.values()]);await update('assessment_runs','id=eq.'+run.id,{status:'complete',output});}catch(e){await update('assessment_runs','id=eq.'+run.id,{status:'failed',error:(e as Error).message});throw e;}return;
+  const [saved]=await query('assessment_runs','job_id=eq.'+job.id);
+  await runReview(provider,rubric.criteria,[...grounded.values()],saved?.output||{},async(stage,status,output,error)=>{
+   await db('/rest/v1/rpc/checkpoint_assessment',{method:'POST',body:JSON.stringify({job_id_input:job.id,lease_token_input:job.lease_token,stage_input:stage,status_input:status,model_input:provider.model,output_input:output??null,error_input:error??null})});
+  });return;
  }
  throw Error('This job type requires an implementation before it can be processed');
 }
