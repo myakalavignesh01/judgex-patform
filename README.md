@@ -48,4 +48,3 @@ Supabase Auth, real organizations and memberships, RLS, server authorization, in
 - `docs/NEXT_MILESTONE.md`: backend implementation plan and acceptance gates.
 
 The private Site deploys only the static production bundle. No provider keys are present or required. Sources are retained alongside the build so the UI can be connected to authenticated services in the next milestone.
-
